@@ -31,6 +31,8 @@ void fotaFinished(esp_err_t rslt)
     // Log heap.
     ESP_LOGI(TAG, "HEAP: FINAL=%" PRIu32 ", MIN=%" PRIu32, finalHeap, minimalHeap);
 
+    finished = true;
+
     if (rslt == ESP_OK)
     {
         ESP_LOGI(TAG, "FOTA SUCCESS");
