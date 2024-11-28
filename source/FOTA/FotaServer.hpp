@@ -12,7 +12,7 @@
 /*******************************************************************************
  * F&K Group FOTA Webserver
  *
- * EEPROM class declaration.
+ * FotaServer class declaration.
  *
  * @author Leonardo Hirata
  * @copyright F&K Group
@@ -46,6 +46,12 @@ namespace FOTA
  * @brief Fota finished event callback function definition.
  */
 using fota_server_handle_t = void (*)(esp_err_t);
+
+/**
+ * @brief Fota finished event callback function definition.
+ */
+using server_connected_handle_t = void (*)(ip_event_ap_staipassigned_t*);
+using server_disconnected_handle_t = void (*)(uint8_t*);
 
 /**
  * @brief Fota Server class.
@@ -88,19 +94,17 @@ public:
      */
     ~FotaServer();
 
-    void set_ssid(const char *ssid, uint32_t len);
-    void set_pswd(const char *pswd, uint32_t len);
     esp_err_t get_ssid(const char *ssid);
     esp_err_t get_pswd(const char *pswd);
-    void set_port(uint16_t port);
     esp_err_t get_port(uint16_t *port);
-    void set_channel(uint8_t channel);
     esp_err_t get_channel(uint8_t *channel);
-    void set_priority(uint8_t priority);
     esp_err_t get_priority(uint8_t *priority);
+    esp_err_t get_server_info(esp_netif_ip_info_t *info);
     void on_started_callback(fota_server_handle_t f);
     void on_finished_callback(fota_server_handle_t f);
-    esp_err_t begin();
+    void on_connected_callback(server_connected_handle_t c);
+    void on_disconnected_callback(server_disconnected_handle_t c);
+    esp_err_t init(const char *ssid, uint32_t ssid_len, const char *pswd, uint32_t pswd_len, uint16_t port, uint8_t channel, uint8_t priority);
     void stop(esp_err_t err);
 
 private:
@@ -136,6 +140,10 @@ private:
 
     fota_server_handle_t m_ff;
     fota_server_handle_t m_fs;
+    server_connected_handle_t m_cc;
+    server_disconnected_handle_t m_dc;
+
+    esp_netif_ip_info_t m_server_info;
 
     /**
      * @brief Fota worker task.
@@ -164,6 +172,11 @@ private:
 
     friend void update_task(void *args);
     friend void cancel_task(void *args);
+
+    friend void _wifi_event_handler(void *arg, esp_event_base_t event_base,
+                         int32_t event_id, void *event_data);
+    friend void _ip_event_handler(void *arg, esp_event_base_t event_base,
+                         int32_t event_id, void *event_data);
 };
 
 } // namespace FOTA

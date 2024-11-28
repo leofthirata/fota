@@ -12,7 +12,7 @@
 /*******************************************************************************
  * F&K Group FOTA Webserver
  *
- * EEPROM class declaration.
+ * FotaServer class declaration.
  *
  * @author Leonardo Hirata
  * @copyright F&K Group
@@ -49,11 +49,9 @@ esp_err_t _http_update_post_handler(httpd_req_t *req);
 esp_err_t _hello_get_handler(httpd_req_t *req);
 esp_err_t _cancel_get_handler(httpd_req_t *req);
 
-void _disconnect_handler(void *arg, esp_event_base_t event_base,
-                         int32_t event_id, void *event_data);
-void _connect_handler(void *arg, esp_event_base_t event_base, int32_t event_id,
-                      void *event_data);
 void _wifi_event_handler(void *arg, esp_event_base_t event_base,
+                         int32_t event_id, void *event_data);
+void _ip_event_handler(void *arg, esp_event_base_t event_base,
                          int32_t event_id, void *event_data);
 esp_err_t stop_webserver(httpd_handle_t server);
 
@@ -107,6 +105,9 @@ FotaServer::FotaServer()
     m_fs = NULL;
     m_ff = NULL;
 
+    m_cc = NULL;
+    m_dc = NULL;
+
     m_esp_netif_ap = NULL;
 
     m_stop = false;
@@ -136,20 +137,33 @@ FotaServer::~FotaServer()
     // }
 }
 
-esp_err_t FotaServer::begin()
+esp_err_t FotaServer::init(const char *ssid, uint32_t ssid_len, const char *pswd, uint32_t pswd_len, uint16_t port, uint8_t channel, uint8_t priority)
 {
+    m_ssid = ssid;
+    m_ssid_len = ssid_len;
+    m_pswd = pswd;
+    m_pswd_len = pswd_len;
+    m_port = port;
+    m_channel = channel;
+    m_priority = priority;
+
     esp_err_t ret = ESP_OK;
 
     xUpdateQueue = xQueueCreate(1, sizeof(UpdatePacket_t));
 
     xTaskCreate(update_task, "update_task", 5120, this, m_priority, &m_update_task);
-    xTaskCreate(cancel_task, "cancel_task", 2048, this, 1, &m_cancel_task);
+    xTaskCreate(cancel_task, "cancel_task", 3072, this, 1, &m_cancel_task);
 
     m_configured = esp_ota_get_boot_partition();
     m_running = esp_ota_get_running_partition();
 
     ESP_LOGI(m_tag, "ESP_WIFI_MODE_AP");
     m_esp_netif_ap = wifi_init_softap();
+    
+    esp_netif_get_ip_info(m_esp_netif_ap, &m_server_info);
+    ESP_LOGW(m_tag, "server ip: " IPSTR, IP2STR(&m_server_info.ip));
+    ESP_LOGW(m_tag, "server gw: " IPSTR, IP2STR(&m_server_info.gw));
+    ESP_LOGW(m_tag, "server netmask: " IPSTR, IP2STR(&m_server_info.netmask));
 
     m_update.uri = WEBSERVER_FOTA_URI;
     m_update.method = HTTP_POST;
@@ -195,12 +209,6 @@ esp_err_t FotaServer::begin()
     return ESP_OK;
 }
 
-void FotaServer::set_ssid(const char *ssid, uint32_t len)
-{
-    m_ssid = ssid;
-    m_ssid_len = len;
-}
-
 esp_err_t FotaServer::get_ssid(const char *ssid)
 {
     if (m_ssid == NULL)
@@ -208,12 +216,6 @@ esp_err_t FotaServer::get_ssid(const char *ssid)
 
     memcpy((void *)ssid, m_ssid, m_ssid_len);
     return ESP_OK;
-}
-
-void FotaServer::set_pswd(const char *pswd, uint32_t len)
-{
-    m_pswd = pswd;
-    m_pswd_len = len;
 }
 
 esp_err_t FotaServer::get_pswd(const char *pswd)
@@ -225,20 +227,10 @@ esp_err_t FotaServer::get_pswd(const char *pswd)
     return ESP_OK;
 }
 
-void FotaServer::set_port(uint16_t port)
-{
-    m_port = port;
-}
-
 esp_err_t FotaServer::get_port(uint16_t *port)
 {
     *port = m_port;
     return ESP_OK;
-}
-
-void FotaServer::set_channel(uint8_t channel)
-{
-    m_channel = channel;
 }
 
 esp_err_t FotaServer::get_channel(uint8_t *channel)
@@ -247,18 +239,18 @@ esp_err_t FotaServer::get_channel(uint8_t *channel)
     return ESP_OK;
 }
 
-void FotaServer::set_priority(uint8_t priority)
-{
-    m_priority = priority;
-}
-
 esp_err_t FotaServer::get_priority(uint8_t *priority)
 {
     *priority = m_priority;
     return ESP_OK;
 }
 
-// todo abort uri?
+esp_err_t FotaServer::get_server_info(esp_netif_ip_info_t *info)
+{
+    *info = m_server_info;
+    return ESP_OK;
+}
+
 void FotaServer::on_started_callback(fota_server_handle_t f)
 {
     m_fs = f;
@@ -267,6 +259,16 @@ void FotaServer::on_started_callback(fota_server_handle_t f)
 void FotaServer::on_finished_callback(fota_server_handle_t f)
 {
     m_ff = f;
+}
+
+void FotaServer::on_connected_callback(server_connected_handle_t c)
+{
+    m_cc = c;
+}
+
+void FotaServer::on_disconnected_callback(server_disconnected_handle_t c)
+{
+    m_dc = c;
 }
 
 esp_err_t _http_404_error_handler(httpd_req_t *req, httpd_err_code_t err)
@@ -346,38 +348,11 @@ esp_err_t _http_update_post_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-void _disconnect_handler(void *arg, esp_event_base_t event_base,
-                         int32_t event_id, void *event_data)
-{
-    httpd_handle_t *server = (httpd_handle_t *)arg;
-    if (*server)
-    {
-        ESP_LOGI(m_tag, "Stopping webserver");
-        if (stop_webserver(*server) == ESP_OK)
-        {
-            *server = NULL;
-        }
-        else
-        {
-            ESP_LOGE(m_tag, "Failed to stop http server");
-        }
-    }
-}
-
-void _connect_handler(void *arg, esp_event_base_t event_base, int32_t event_id,
-                      void *event_data)
-{
-    // httpd_handle_t *server = (httpd_handle_t *)arg;
-    // if (*server == NULL)
-    // {
-    ESP_LOGI(m_tag, "_connect_handler");
-    //     *server = start_webserver();
-    // }
-}
-
 void _wifi_event_handler(void *arg, esp_event_base_t event_base,
                          int32_t event_id, void *event_data)
 {
+    FOTA::FotaServer *fota = static_cast<FOTA::FotaServer *>(arg);
+
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STACONNECTED)
     {
         wifi_event_ap_staconnected_t *event =
@@ -392,6 +367,26 @@ void _wifi_event_handler(void *arg, esp_event_base_t event_base,
             (wifi_event_ap_stadisconnected_t *)event_data;
         ESP_LOGI(m_tag, "Station " MACSTR " left, AID=%d", MAC2STR(event->mac),
                  event->aid);
+
+        if (fota->m_dc)
+            fota->m_dc(event->mac);
+    }
+}
+
+void _ip_event_handler(void *arg, esp_event_base_t event_base,
+                         int32_t event_id, void *event_data)
+{
+    FOTA::FotaServer *fota = static_cast<FOTA::FotaServer *>(arg);
+
+// IP_EVENT_STA_GOT_IP
+    if (event_base == IP_EVENT &&
+        event_id == IP_EVENT_AP_STAIPASSIGNED)
+    {
+        ip_event_ap_staipassigned_t *event = (ip_event_ap_staipassigned_t *)event_data;
+        ESP_LOGI(m_tag, "ip: " IPSTR, IP2STR(&event->ip));
+        
+        if (fota->m_cc)
+            fota->m_cc(event);
     }
 }
 
@@ -416,7 +411,10 @@ esp_netif_t *FotaServer::wifi_init_softap(void)
 
     /* Register Event handler */
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
-        WIFI_EVENT, ESP_EVENT_ANY_ID, &_wifi_event_handler, NULL, NULL));
+        WIFI_EVENT, ESP_EVENT_ANY_ID, &_wifi_event_handler, this, NULL));
+    /* Register Event handler */
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(
+        IP_EVENT, ESP_EVENT_ANY_ID, &_ip_event_handler, this, NULL));
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_ap_config));
@@ -684,11 +682,10 @@ void FotaServer::stop(esp_err_t err)
     if (!m_stop)
     {
         m_stop = true;
+        is_fota_ok = true;
 
         if (m_ff)
             m_ff(err);
-
-        is_fota_ok = true;
 
         stop_webserver(m_server);
         esp_ota_abort(m_update_handle);

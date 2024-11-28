@@ -21,6 +21,7 @@ bool finished = false;
 */
 void fotaFinished(esp_err_t rslt)
 {
+    finished = true;
     // Get final heap size.
     uint32_t finalHeap, minimalHeap;
 
@@ -31,8 +32,6 @@ void fotaFinished(esp_err_t rslt)
     // Log heap.
     ESP_LOGI(TAG, "HEAP: FINAL=%" PRIu32 ", MIN=%" PRIu32, finalHeap, minimalHeap);
 
-    finished = true;
-
     if (rslt == ESP_OK)
     {
         ESP_LOGI(TAG, "FOTA SUCCESS");
@@ -41,6 +40,19 @@ void fotaFinished(esp_err_t rslt)
     {
         ESP_LOGE(TAG, "FOTA FAILED: %s", esp_err_to_name(rslt));
     }
+}
+
+void on_connected(ip_event_ap_staipassigned_t *dev)
+{
+    ESP_LOGW(TAG, "connected");
+    ESP_LOGI(TAG, "ip: " IPSTR, IP2STR(&dev->ip));
+    ESP_LOG_BUFFER_HEX(TAG, dev->mac, 6);
+}
+
+void on_disconnected(uint8_t mac[6])
+{
+    ESP_LOGW(TAG, "disconnected");
+    ESP_LOG_BUFFER_HEX(TAG, mac, 6);
 }
 
 extern "C" void app_main(void)
@@ -57,17 +69,18 @@ extern "C" void app_main(void)
     // Log heap.
     ESP_LOGI(TAG, "HEAP: INITIAL=%" PRIu32 ", MIN=%" PRIu32, initialHeap, minimalHeap);
 
-    fota->set_ssid(SERVER_SSID, SERVER_SSID_LEN);
-    fota->set_pswd(SERVER_PSWD, SERVER_PSWD_LEN);
-    fota->set_port(8000);
-    fota->set_priority(5);
-    fota->set_channel(1);
-
     char ssid[30];
     char pswd[30];
     uint16_t port;
     uint8_t priority;
     uint8_t channel;
+
+    fota->on_finished_callback(fotaFinished);
+    fota->on_connected_callback(on_connected);
+    fota->on_disconnected_callback(on_disconnected);
+
+    ESP_ERROR_CHECK(fota->init(SERVER_SSID, SERVER_SSID_LEN, SERVER_PSWD, SERVER_PSWD_LEN, 8000, 5, 1));
+
     if (fota->get_ssid(ssid) == ESP_OK)
         ESP_LOGI(TAG, "ssid %s", ssid);
     
@@ -78,23 +91,15 @@ extern "C" void app_main(void)
     fota->get_priority(&priority);
     fota->get_channel(&channel);
 
+    esp_netif_ip_info_t info;
+    fota->get_server_info(&info);
+    ESP_LOGW(TAG, "server ip: " IPSTR, IP2STR(&info.ip));
+    ESP_LOGW(TAG, "server gw: " IPSTR, IP2STR(&info.gw));
+    ESP_LOGW(TAG, "server netmask: " IPSTR, IP2STR(&info.netmask));
+
     ESP_LOGI(TAG, "port: %d", port);
     ESP_LOGI(TAG, "priority: %d", priority);
     ESP_LOGI(TAG, "channel: %d", channel);
-
-    fota->on_finished_callback(fotaFinished);
-
-    ESP_ERROR_CHECK(fota->begin());
-
-    // ESP_LOGI(TAG, "HEAP: BEGIN=%" PRIu32 ", MIN=%" PRIu32, esp_get_free_heap_size(), esp_get_minimum_free_heap_size());
-
-    // fota->stop(ESP_OK);
-
-    // ESP_LOGI(TAG, "HEAP: STOP=%" PRIu32 ", MIN=%" PRIu32, esp_get_free_heap_size(), esp_get_minimum_free_heap_size());
-
-    // delete fota;
-
-    // ESP_LOGI(TAG, "HEAP: DELETE=%" PRIu32 ", MIN=%" PRIu32, esp_get_free_heap_size(), esp_get_minimum_free_heap_size());
 
     while (1)
     {
