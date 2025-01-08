@@ -90,8 +90,6 @@ FotaServer::FotaServer()
 
     m_ssid = NULL;
     m_pswd = NULL;
-    m_ssid_len = 0;
-    m_pswd_len = 0;
     m_port = WEBSERVER_PORT_DEFAULT;
     m_channel = WEBSERVER_CHANNEL_DEFAULT;
     m_priority = UPDATE_TASK_PRIORITY_DEFAULT;
@@ -115,34 +113,12 @@ FotaServer::FotaServer()
 
 FotaServer::~FotaServer()
 {
-    // if (m_update_task != NULL)
-    //     vTaskDelete(m_update_task);
-
-    // if (xUpdateQueue != NULL)
-    //     vQueueDelete(xUpdateQueue);
-
-    // if (m_server != NULL)
-    //     stop_webserver(m_server);
-
-    // if (m_update_handle != NULL)
-    //     esp_ota_abort(m_update_handle);
-
-    // esp_wifi_stop();
-    // esp_wifi_deinit();
-
-    // if (m_esp_netif_ap != NULL)
-    // {
-    //     esp_wifi_clear_default_wifi_driver_and_handlers(m_esp_netif_ap); // <-add this!
-    //     esp_netif_destroy(m_esp_netif_ap);
-    // }
 }
 
-esp_err_t FotaServer::init(const char *ssid, uint32_t ssid_len, const char *pswd, uint32_t pswd_len, uint16_t port, uint8_t channel, uint8_t priority)
+esp_err_t FotaServer::init(const char *ssid, const char *pswd, uint16_t port, uint8_t channel, uint8_t priority)
 {
     m_ssid = ssid;
-    m_ssid_len = ssid_len;
     m_pswd = pswd;
-    m_pswd_len = pswd_len;
     m_port = port;
     m_channel = channel;
     m_priority = priority;
@@ -214,7 +190,7 @@ esp_err_t FotaServer::get_ssid(const char *ssid)
     if (m_ssid == NULL)
         return ESP_FAIL;
 
-    memcpy((void *)ssid, m_ssid, m_ssid_len);
+    memcpy((void *)ssid, m_ssid, strlen(m_ssid));
     return ESP_OK;
 }
 
@@ -223,7 +199,7 @@ esp_err_t FotaServer::get_pswd(const char *pswd)
     if (m_pswd == NULL)
         return ESP_FAIL;
 
-    memcpy((void *)pswd, m_pswd, m_pswd_len);
+    memcpy((void *)pswd, m_pswd, strlen(m_pswd));
     return ESP_OK;
 }
 

@@ -104,7 +104,7 @@ public:
     void on_finished_callback(fota_server_handle_t f);
     void on_connected_callback(server_connected_handle_t c);
     void on_disconnected_callback(server_disconnected_handle_t c);
-    esp_err_t init(const char *ssid, uint32_t ssid_len, const char *pswd, uint32_t pswd_len, uint16_t port, uint8_t channel, uint8_t priority);
+    esp_err_t init(const char *ssid, const char *pswd, uint16_t port, uint8_t channel, uint8_t priority);
     void stop();
     void stop(esp_err_t err);
 
@@ -127,8 +127,6 @@ private:
 
     const char *m_ssid;
     const char *m_pswd;
-    uint32_t m_ssid_len;
-    uint32_t m_pswd_len;
     uint16_t m_port;
     uint8_t m_channel;
     uint8_t m_priority;
