@@ -105,6 +105,7 @@ public:
     void on_connected_callback(server_connected_handle_t c);
     void on_disconnected_callback(server_disconnected_handle_t c);
     esp_err_t init(const char *ssid, uint32_t ssid_len, const char *pswd, uint32_t pswd_len, uint16_t port, uint8_t channel, uint8_t priority);
+    void stop();
     void stop(esp_err_t err);
 
 private:

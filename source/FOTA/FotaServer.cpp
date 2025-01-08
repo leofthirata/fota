@@ -677,6 +677,11 @@ esp_err_t FotaServer::fota_end()
     return err;
 }
 
+void FotaServer::stop()
+{
+    stop(ESP_OK);
+}
+
 void FotaServer::stop(esp_err_t err)
 {
     if (!m_stop)
