@@ -79,7 +79,7 @@ extern "C" void app_main(void)
     fota->on_connected_callback(on_connected);
     fota->on_disconnected_callback(on_disconnected);
 
-    ESP_ERROR_CHECK(fota->init(SERVER_SSID, SERVER_SSID_LEN, SERVER_PSWD, SERVER_PSWD_LEN, 8000, 5, 1));
+    ESP_ERROR_CHECK(fota->init(SERVER_SSID, SERVER_PSWD, 8000, 5, 1));
 
     if (fota->get_ssid(ssid) == ESP_OK)
         ESP_LOGI(TAG, "ssid %s", ssid);
