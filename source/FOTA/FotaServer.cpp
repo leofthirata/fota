@@ -109,6 +109,8 @@ FotaServer::FotaServer()
     m_esp_netif_ap = NULL;
 
     m_stop = false;
+
+    m_decrypt_args = NULL;
 }
 
 FotaServer::~FotaServer()
@@ -129,6 +131,22 @@ esp_err_t FotaServer::init(const char *ssid, const char *pswd, uint16_t port, ui
 
     xTaskCreate(update_task, "update_task", 5120, this, m_priority, &m_update_task);
     xTaskCreate(cancel_task, "cancel_task", 3072, this, 1, &m_cancel_task);
+
+    esp_decrypt_cfg_t cfg = {};
+    cfg.rsa_priv_key = (char *)rsa_private_pem_start;
+    cfg.rsa_priv_key_len = (size_t)rsa_private_pem_end - (size_t)rsa_private_pem_start;
+    
+    m_decrypt_ctx = esp_encrypted_img_decrypt_start(&cfg);
+    if (m_decrypt_ctx == NULL) 
+        return ESP_FAIL;
+
+    m_decrypt_args = {};
+    m_decrypt_args = (pre_enc_decrypt_arg_t *)calloc(1, sizeof(pre_enc_decrypt_arg_t));
+    if (!m_decrypt_args) 
+    {
+        ESP_LOGE(m_tag, "Failed to allocate memory");
+        return ESP_FAIL;
+    }
 
     m_configured = esp_ota_get_boot_partition();
     m_running = esp_ota_get_running_partition();
@@ -482,13 +500,13 @@ esp_err_t FotaServer::update(char *data, size_t len, bool final)
             return err; // abort ota and close session?
         }
 
-        // esp err t
-        err = is_new_firmware_new(&new_app_info, &running_app_info);
-        if (err != ESP_OK)
-        {
-            m_err_msg = "New firmware version is the same as the running firmware version. Skipping update.";
-            return err; // abort ota and close session?
-        }
+        // // esp err t
+        // err = is_new_firmware_new(&new_app_info, &running_app_info);
+        // if (err != ESP_OK)
+        // {
+        //     m_err_msg = "New firmware version is the same as the running firmware version. Skipping update.";
+        //     return err; // abort ota and close session?
+        // }
 
         m_image_checked = true;
 
@@ -619,7 +637,7 @@ esp_err_t FotaServer::fota_begin(const esp_partition_t *partition, size_t image_
 esp_err_t FotaServer::fota_write(const void *data, size_t size)
 {
     esp_err_t err = esp_ota_write(m_update_handle, data, size);
-    if (err != ESP_OK)
+    else if (err != ESP_OK)
     {
         esp_ota_abort(m_update_handle);
         return err;
@@ -676,6 +694,8 @@ void FotaServer::stop(esp_err_t err)
         esp_wifi_clear_default_wifi_driver_and_handlers(m_esp_netif_ap); // <-add this!
         esp_netif_destroy(m_esp_netif_ap);
 
+        esp_encrypted_img_decrypt_end(m_decrypt_ctx);
+
         vTaskDelete(m_update_task);
         vQueueDelete(xUpdateQueue);
 
@@ -712,14 +732,25 @@ void update_task(void *args)
             if (fota->m_req == NULL)
                 fota->m_req = update_packet.req;
         
-            err = fota->update(update_packet.buf,
-                         update_packet.len, update_packet.ok);
+            fota->m_decrypt_args->data_in = update_packet.buf;
+            fota->m_decrypt_args->data_in_len = update_packet.len;
+            err = esp_encrypted_img_decrypt_data((esp_decrypt_handle_t *)fota->m_decrypt_ctx, fota->m_decrypt_args);
+            if (err == ESP_FAIL) 
+            {
+                fota->send_err(err);
+                esp_ota_abort(fota->m_update_handle);
+                fota->m_image_checked = false;
+                break;
+            }
 
+            err = fota->update(fota->m_decrypt_args->data_out,
+                         fota->m_decrypt_args->data_out_len, update_packet.ok);
             if (err != ESP_OK)
             {
                 fota->send_err(err);
                 esp_ota_abort(fota->m_update_handle);
                 fota->m_image_checked = false;
+                break;
             }
             if (can_send_err == true) // so queue doesnt delete itself after finding an error
             {

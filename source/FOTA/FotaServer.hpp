@@ -36,6 +36,10 @@
 #include "esp_app_format.h"
 #include "esp_flash_partitions.h"
 #include "esp_partition.h"
+
+// encryption
+#include "esp_encrypted_img.h"
+
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
@@ -68,12 +72,6 @@ typedef struct
 class FotaServer
 {
 public:
-    static const uint32_t DEFAULT_PERIOD_SEC =
-        3600; /// Default auto fetch period in seconds.
-    static const uint32_t DEFAULT_STACK_SIZE =
-        4096; /// Default fota thread stack size.
-    static const uint32_t DEFAULT_THREAD_PRIORITY =
-        4; /// Default fota thread priority.
     static const uint32_t DEFAULT_BUFFER_SIZE =
         2048; /// Default fota buffer size.
 
@@ -144,13 +142,8 @@ private:
 
     esp_netif_ip_info_t m_server_info;
 
-    /**
-     * @brief Fota worker task.
-     *
-     * This task is used to call @f run without blocking the user task.
-     *
-     * @param[in] param Pointer to the fota object that will be run.
-     */
+    pre_enc_decrypt_arg_t *m_decrypt_args;
+    esp_decrypt_handle_t m_decrypt_ctx;
 
     esp_netif_t *wifi_init_softap(void);
     httpd_handle_t start_webserver(void);

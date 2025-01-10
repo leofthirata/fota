@@ -40,5 +40,4 @@ build
 .vscode
 
 # Local config files
-sdkconfig
-sdkconfig.old
+sdkconfig.*
