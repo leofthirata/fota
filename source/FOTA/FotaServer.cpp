@@ -26,6 +26,9 @@
 
 #include "FOTA/FotaServer.hpp"
 
+extern const uint8_t rsa_private_pem_start[] asm("_binary_private_pem_start");
+extern const uint8_t rsa_private_pem_end[]   asm("_binary_private_pem_end");
+
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
@@ -637,7 +640,7 @@ esp_err_t FotaServer::fota_begin(const esp_partition_t *partition, size_t image_
 esp_err_t FotaServer::fota_write(const void *data, size_t size)
 {
     esp_err_t err = esp_ota_write(m_update_handle, data, size);
-    else if (err != ESP_OK)
+    if (err != ESP_OK)
     {
         esp_ota_abort(m_update_handle);
         return err;
