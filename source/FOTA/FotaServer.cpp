@@ -1,23 +1,3 @@
-/******************************************************************************
- * Copyright © 2008 - 2024, F&K Group. All rights reserved.
- *
- * No part of this software may be reproduced, distributed, or transmitted in
- * any form or by any means without the prior written permission of the F&K Group
- * company.
- *
- * For permission requests, contact the company through the e-mail address
- * leonardo.hirata@fkgroup.com.br with subject "Software Licence Request".
- ******************************************************************************/
-
-/*******************************************************************************
- * F&K Group FOTA Webserver
- *
- * FotaServer class declaration.
- *
- * @author Leonardo Hirata
- * @copyright F&K Group
- ******************************************************************************/
-
 #include <cstring>
 #include <cstdlib>
 #include <cstring>
