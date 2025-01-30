@@ -1,7 +1,0 @@
-generate RSA private KEY
-openssl genrsa -traditional -out private.pem 3072
-openssl rsa -traditional -in private.pem -outform PEM -pubout -out public.pem
-openssl rsa -traditional -in private.pem -out private_unencrypted.pem -outform PEM
-
-python3 img_gen.py fw-to-be-encrypted.bin public.pem encrypted-fw.bin encrypt
-python3 img_gen.py fw-to-be-decrypted.bin private.pem decrypted-fw.bin decrypt
