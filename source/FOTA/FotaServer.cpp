@@ -683,6 +683,7 @@ void FotaServer::stop(esp_err_t err)
         vQueueDelete(xUpdateQueue);
 
         ESP_LOGW(m_tag, "Freeing memory from Firmware upgrade service");
+        esp_restart();
     }
     else
         ESP_LOGW(m_tag, "Service already stopped");
